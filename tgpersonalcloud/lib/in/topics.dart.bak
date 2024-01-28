@@ -1,0 +1,418 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:accordion/accordion.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as path;
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:top_snackbar_flutter/custom_snack_bar.dart';
+import 'package:top_snackbar_flutter/top_snack_bar.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+String server = "http://10.0.2.2:5000";
+
+// Mapa para mapear los valores de color a los colores correspondientes
+Map<int, Color> colorMap = {
+  7322096: const Color(0xBB6FB9F0),
+  16766590: const Color(0xBBFFD67E),
+  13338331: const Color(0xBBCB86DB),
+  9367192: const Color(0xBB8EEE98),
+  16749490: const Color(0xBBFF93B2),
+  16478047: const Color(0xBBFB6F5F),
+};
+
+class TopicsPage extends StatefulWidget {
+  final String phoneNumber;
+  final int idChannel;
+  final String titleChannel;
+  const TopicsPage(this.phoneNumber, this.idChannel, this.titleChannel,
+      {super.key});
+
+  @override
+  TopicsPageState createState() => TopicsPageState();
+}
+
+class TopicsPageState extends State<TopicsPage> {
+  bool isLoading = true;
+  List<dynamic> topicsList = [];
+  List<Accordion> accordionList = [];
+  Map<int, String?> selectedFolders = {};
+
+  @override
+  void initState() {
+    super.initState();
+    try {
+      _initializeAsyncData();
+    } catch (e) {
+      if (kDebugMode) {
+        print(e);
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>> getTopics(
+      String phoneNumber, int channelId) async {
+    final response = await http.post(Uri.parse('$server/get_topics'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'phone_number': "+$phoneNumber", 'id': channelId}));
+
+    if (response.statusCode == 200) {
+      final topics = jsonDecode(response.body);
+      return topics;
+    } else {
+      throw Exception('Error al obtener los topics');
+    }
+  }
+
+  Future<Map<String, dynamic>> getMessages(
+      String phoneNumber, int channelId, int topicId) async {
+    final response = await http.post(Uri.parse('$server/get_messages'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'phone_number': "+$phoneNumber",
+          'channel_id': channelId,
+          'topic_id': topicId
+        }));
+
+    if (response.statusCode == 200) {
+      final messages = jsonDecode(response.body);
+      return messages;
+    } else {
+      throw Exception('Error al obtener los mensajes');
+    }
+  }
+
+  Future<void> _initializeAsyncData() async {
+    try {
+      setState(() {
+        isLoading = true;
+      });
+
+      final topics = await getTopics(widget.phoneNumber, widget.idChannel);
+      final List<dynamic> topicsListMessages = topics['topics'];
+
+      for (var i = 0; i < topicsListMessages.length; i++) {
+        final topicId = topicsListMessages[i]['id'];
+        final messages =
+            await getMessages(widget.phoneNumber, widget.idChannel, topicId);
+
+        // Filtra los mensajes para eliminar aquellos con "file_size" y "text" nulos
+        final filteredMessages = messages['messages']
+            .where((message) =>
+                message['file_size'] != null || message['text'] != null)
+            .toList();
+
+        topicsListMessages[i]['content'] = {'messages': filteredMessages};
+        topicsListMessages[i]['selectedFolder'] = null; // Inicializa como null
+      }
+
+      setState(() {
+        topicsList = topicsListMessages;
+        isLoading = false;
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        print("Error al obtener grupos: $e");
+      }
+    }
+  }
+
+  Future<void> _showPopup(BuildContext context) async {
+    await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF484848),
+          title: Text(
+            "Título del Popup",
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.w500,
+              color: const Color(0xFF7C8BA0),
+            ),
+          ),
+          content: Text(
+            "Este es un mensaje de ejemplo en el popup.",
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.w500,
+              color: const Color(0xFF7C8BA0),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text(
+                "Cerrar",
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF7C8BA0),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> pickFolder(Map<String, dynamic> topic) async {
+    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+    if (selectedDirectory != null) {
+      final lastFolderName = path.basename(selectedDirectory);
+      final topicId = topic['id'];
+
+      if (!selectedFolders.containsValue(lastFolderName)) {
+        setState(() {
+          topic['selectedFolder'] = lastFolderName;
+          selectedFolders[topicId] = lastFolderName;
+        });
+      } else {
+        showTopSnackBar(
+          Overlay.of(context),
+          CustomSnackBar.error(
+            message:
+                "Something went wrong. Please check your credentials and try again",
+            textStyle: GoogleFonts.poppins(),
+          ),
+        );
+      }
+    }
+  }
+
+  static const headerStyle = TextStyle(
+      color: Color(0xffffffff), fontSize: 18, fontWeight: FontWeight.bold);
+  static const contentStyleHeader = TextStyle(
+      color: Color(0xff999999), fontSize: 14, fontWeight: FontWeight.w700);
+  static const contentStyle = TextStyle(
+      color: Color(0xff999999), fontSize: 14, fontWeight: FontWeight.normal);
+  static const loremIpsum =
+      '''Lorem ipsum is typically a corrupted version of 'De finibus bonorum et malorum', a 1st century BC text by the Roman statesman and philosopher Cicero, with words altered, added, and removed to make it nonsensical and improper Latin.''';
+  static const slogan =
+      'Do not forget to play around with all sorts of colors, backgrounds, borders, etc.';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Padding(
+          padding: const EdgeInsets.only(left: 20.0),
+          child: Text(
+            widget.titleChannel,
+            style: GoogleFonts.poppins(
+              fontSize: 20.0,
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFFFFFFFF),
+            ),
+          ),
+        ),
+        titleSpacing: 0.0,
+        toolbarHeight: 60.2,
+        toolbarOpacity: 0.8,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.only(
+            bottomRight: Radius.circular(25),
+            bottomLeft: Radius.circular(25),
+          ),
+        ),
+        elevation: 0.0,
+        backgroundColor: const Color(0xFF222222),
+        actions: [
+          IconButton(
+            onPressed: () {
+              _initializeAsyncData();
+            },
+            icon: const Icon(
+                Icons.refresh), // Aquí puedes usar el icono de recarga
+          ),
+          IconButton(
+            onPressed: () {
+              print(selectedFolders);
+            },
+            icon: const Icon(Icons
+                .folder_off_rounded), // Aquí puedes usar el icono de recarga
+          ),
+          IconButton(
+            onPressed: () => {
+              _showPopup(context),
+            },
+            icon: const Icon(Icons.more_vert),
+          ),
+        ],
+        shadowColor: const Color(0xFF58ACFF),
+      ),
+      backgroundColor: const Color(0xFF1E1E1E),
+      body: Column(
+        children: <Widget>[
+          const SizedBox(
+            height: 20.0,
+          ),
+          Expanded(
+            child: isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(),
+                  )
+                : topicsList.isNotEmpty
+                    ? Accordion(
+                        paddingListHorizontal: 20,
+                        children: topicsList.map<AccordionSection>((topic) {
+                          final topicId = topic['id'];
+                          final topicTitle = topic['title'];
+                          final topicColor = colorMap[topic['color']];
+                          final topicContent = topic['content'];
+
+                          return AccordionSection(
+                            headerPadding: const EdgeInsets.all(10),
+                            contentBorderColor: topicColor,
+                            contentBackgroundColor: const Color(0xFFFFFFFF),
+                            headerBorderColor: topicColor,
+                            headerBorderColorOpened: topicColor,
+                            headerBackgroundColor: topicColor,
+                            headerBackgroundColorOpened: topicColor,
+                            isOpen: true,
+                            contentVerticalPadding: 20,
+                            leftIcon: const Icon(Icons.folder_copy,
+                                color: Colors.white),
+                            header: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  topicTitle,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 18.0,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFFFFFFFF),
+                                  ),
+                                ),
+                                Text(
+                                  topic['selectedFolder'] != null
+                                      ? "Selected Folder -> ${topic['selectedFolder']}"
+                                      : "Unselected Folder",
+                                  style: const TextStyle(
+                                    fontSize: 14.0,
+                                    fontWeight: FontWeight.normal,
+                                    color: Color(0xFFFFFFFF),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            content: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (topicContent['messages'].isNotEmpty)
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Padding(
+                                        padding:
+                                            EdgeInsets.fromLTRB(0, 0, 0, 10),
+                                        child: Text(
+                                          'Latest files backuped',
+                                          style: TextStyle(
+                                            fontSize: 18.0,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.black,
+                                          ),
+                                        ),
+                                      ),
+                                      Container(
+                                        width: 300,
+                                        padding: const EdgeInsets.all(8.0),
+                                        decoration: BoxDecoration(
+                                          border:
+                                              Border.all(color: Colors.grey),
+                                          borderRadius:
+                                              BorderRadius.circular(8.0),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            ...topicContent['messages']
+                                                .map<Widget>((message) {
+                                              final fileText = message['text'];
+
+                                              if (fileText != null) {
+                                                return Text(
+                                                  fileText,
+                                                  style: const TextStyle(
+                                                    fontSize: 14.0,
+                                                    color: Colors.grey,
+                                                  ),
+                                                );
+                                              }
+
+                                              return const SizedBox.shrink();
+                                            }).toList(),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                const SizedBox(
+                                  height: 10,
+                                ),
+                                ButtonBar(
+                                  alignment: MainAxisAlignment.spaceEvenly,
+                                  buttonHeight: 52.0,
+                                  buttonMinWidth: 90.0,
+                                  children: <Widget>[
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: topicColor,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(20.0),
+                                        ),
+                                      ),
+                                      onPressed: () async {
+                                        print(topic['selectedFolder']);
+                                        if (topic['selectedFolder'] == null) {
+                                          pickFolder(topic);
+                                        } else {}
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(12.0),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.folder,
+                                                color: Colors.white),
+                                            const SizedBox(width: 8.0),
+                                            Text(
+                                              "Select Folder",
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 12.0,
+                                                fontWeight: FontWeight.w500,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      )
+                    : Center(
+                        child: Text(
+                          "Todavía no existen grupos :(",
+                          style: GoogleFonts.poppins(
+                            fontSize: 18.0,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFFFFFFFF),
+                          ),
+                        ),
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+}

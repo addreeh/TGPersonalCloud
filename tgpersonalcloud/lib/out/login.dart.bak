@@ -1,0 +1,157 @@
+import 'package:flutter/material.dart';
+import 'package:tgpersonalcloud/out/otp.dart';
+import 'package:transition/transition.dart';
+
+class LoginPage extends StatefulWidget {
+  @override
+  _LoginPageState createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final TextEditingController prefixController = TextEditingController();
+
+  final TextEditingController phoneNumberController = TextEditingController();
+
+  @override
+  void dispose() {
+    prefixController.dispose();
+    phoneNumberController.dispose();
+    super.dispose();
+  }
+
+  // Esta función maneja el comportamiento de navegación hacia atrás.
+  Future<bool> _onBackPressed() {
+    // Puedes mostrar un diálogo de confirmación si deseas.
+    // Si quieres bloquear la navegación hacia atrás sin diálogo, simplemente devuelve 'true'.
+    return Future.value(false); // Impide que el usuario retroceda.
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop:
+          _onBackPressed, // Llama a la función _onBackPressed al presionar el botón de retroceso.
+      child: Scaffold(
+        resizeToAvoidBottomInset: false,
+        body: SafeArea(
+          top: true,
+          child: Stack(
+            children: [
+              Align(
+                alignment: const AlignmentDirectional(0.00, 0.00),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.asset(
+                    Theme.of(context).brightness == Brightness.dark
+                        ? 'assets/dark_mode/login2.jpg'
+                        : 'assets/light_mode/login.jpg',
+                    width: 536,
+                    height: 839,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+              Align(
+                alignment: const AlignmentDirectional(0, 0.15),
+                child: Container(
+                  width: 300,
+                  child: Column(
+                    mainAxisSize: MainAxisSize
+                        .min, // Ajusta el tamaño del Column al contenido
+                    children: [
+                      TextField(
+                        controller: phoneNumberController,
+                        cursorColor: const Color.fromRGBO(88, 172, 255, 1),
+                        keyboardType: TextInputType.phone,
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Color(0xFF7C8BA0),
+                          fontWeight: FontWeight.w500,
+                        ),
+                        decoration: InputDecoration(
+                          suffixIcon: phoneNumberController.text.isEmpty
+                              ? IconButton(
+                                  onPressed: () {
+                                    phoneNumberController.clear();
+                                    setState(() {});
+                                  },
+                                  icon: const Icon(
+                                    Icons.clear,
+                                    color: Color(0xFF7C8BA0),
+                                    size: 20,
+                                  ),
+                                )
+                              : null,
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(
+                              color: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? const Color(
+                                      0xFFF5F9FE) // Color del borde en modo oscuro
+                                  : const Color(
+                                      0xFFEFF4F9), // Color del borde en modo claro
+                              width: 0,
+                            ),
+                          ),
+                          focusedBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(
+                              color: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? const Color(
+                                      0xFFF5F9FE) // Color del borde en modo oscuro
+                                  : const Color(
+                                      0xFFEFF4F9), // Color del borde en modo claro
+                              width: 0,
+                            ),
+                          ),
+                          labelStyle: const TextStyle(
+                            fontFamily: 'Readex Pro',
+                            color: Color(0xFF7C8BA0),
+                            fontWeight: FontWeight.w500,
+                          ),
+                          filled: true,
+                          fillColor: Theme.of(context).brightness ==
+                                  Brightness.dark
+                              ? const Color(
+                                  0xFFF5F9FE) // Color del fondo en modo oscuro
+                              : const Color(
+                                  0xFFEFF4F9), // Color del fondo en modo claro
+                          labelText: 'Phone Number',
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 10.0),
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+                      Opacity(
+                        opacity: 0,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            print(
+                                'Número de teléfono: ${phoneNumberController.text}');
+
+                            Navigator.push(
+                                context,
+                                Transition(
+                                    child: OtpPage(),
+                                    transitionEffect: TransitionEffect.FADE));
+                          },
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 200,
+                              vertical: 20,
+                            ),
+                          ),
+                          child: const Text(''),
+                        ),
+                      )
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
